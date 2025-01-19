@@ -19,13 +19,13 @@ function cleanupFiles(...files) {
 (async () => {
     const { code, input } = workerData;
 
-    // Paths for temporary Java files
+    // Paths for the temporary Java file
     const tmpDir = os.tmpdir();
-    const javaFile = path.join(tmpDir, `TempProgram_${Date.now()}.java`);
-    const classFile = javaFile.replace(".java", ".class");
+    const javaFile = path.join(tmpDir, "Main.java");
+    const classFile = path.join(tmpDir, "Main.class");
 
     try {
-        // Write the Java code to the source file
+        // Write the Java code to the Main.java file
         fs.writeFileSync(javaFile, code);
 
         // Compile the Java code
@@ -41,8 +41,7 @@ function cleanupFiles(...files) {
         // Execute the compiled Java program
         let output = "";
         try {
-            const className = path.basename(javaFile, ".java");
-            output = execSync(`java -cp ${tmpDir} ${className}`, {
+            output = execSync(`java -cp ${tmpDir} Main`, {
                 input, // Pass input to the Java program
                 encoding: "utf-8",
             });
