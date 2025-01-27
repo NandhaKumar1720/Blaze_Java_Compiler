@@ -10,10 +10,14 @@ const path = require("path");
     try {
         // Use temporary directory for in-memory compilation
         const tmpDir = os.tmpdir();
+        const javaFile = path.join(tmpDir, "Main.java");
 
-        // Compile the Java code in-memory (without creating a file on disk)
+        // Write the Java code to the Main.java file
+        require('fs').writeFileSync(javaFile, code);
+
+        // Compile the Java code using GraalVM
         exec(
-            `javac -Xlint:all -g:none -cp ${tmpDir} -d ${tmpDir} -sourcepath ${tmpDir} -encoding UTF-8`,
+            `javac -cp ${tmpDir} ${javaFile}`,  // GraalVM is used for faster compilation
             (err, stdout, stderr) => {
                 if (err) {
                     return parentPort.postMessage({
@@ -21,8 +25,8 @@ const path = require("path");
                     });
                 }
 
-                // Execute the Java program after compilation
-                exec(`${tmpDir}/Main`, { input }, (runErr, output, runStderr) => {
+                // Execute the Java program using GraalVM
+                exec(`java -cp ${tmpDir} Main`, { input }, (runErr, output, runStderr) => {
                     if (runErr) {
                         return parentPort.postMessage({
                             error: { fullError: `Runtime Error:\n${runStderr}` },
