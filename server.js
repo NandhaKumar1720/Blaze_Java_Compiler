@@ -13,33 +13,68 @@ app.use(cors());
 // Middleware for JSON parsing
 app.use(bodyParser.json());
 
+// Thread pool setup
+const workers = [];
+const maxWorkers = 4; // Adjust based on available resources
+
+// Function to create a new worker
+function createWorker() {
+    return new Worker("./java-worker.js");
+}
+
+// Function to get a worker from the pool
+function getWorker() {
+    if (workers.length > 0) {
+        return workers.pop();
+    } else if (workers.length < maxWorkers) {
+        return createWorker();
+    } else {
+        throw new Error("No available workers");
+    }
+}
+
+// Function to release a worker back to the pool
+function releaseWorker(worker) {
+    if (workers.length < maxWorkers) {
+        workers.push(worker);
+    } else {
+        worker.terminate();
+    }
+}
+
 // POST endpoint for Java code execution
 app.post("/", (req, res) => {
     const { code, input } = req.body;
 
-    // Validate input
     if (!code) {
         return res.status(400).json({ error: { fullError: "Error: No code provided!" } });
     }
 
-    // Create a worker thread for Java code execution
-    const worker = new Worker("./java-worker.js", {
-        workerData: { code, input },
-    });
+    try {
+        // Get a worker from the pool
+        const worker = getWorker();
 
-    worker.on("message", (result) => {
-        res.json(result);
-    });
+        // Send code to the worker for execution
+        worker.postMessage({ code, input });
 
-    worker.on("error", (err) => {
-        res.status(500).json({ error: { fullError: `Worker error: ${err.message}` } });
-    });
+        worker.on("message", (result) => {
+            res.json(result);
+            releaseWorker(worker);  // Release worker back to the pool
+        });
 
-    worker.on("exit", (code) => {
-        if (code !== 0) {
-            console.error(`Worker stopped with exit code ${code}`);
-        }
-    });
+        worker.on("error", (err) => {
+            res.status(500).json({ error: { fullError: `Worker error: ${err.message}` } });
+            releaseWorker(worker);  // Release worker back to the pool
+        });
+
+        worker.on("exit", (code) => {
+            if (code !== 0) {
+                console.error(`Worker stopped with exit code ${code}`);
+            }
+        });
+    } catch (err) {
+        res.status(500).json({ error: { fullError: `Server error: ${err.message}` } });
+    }
 });
 
 // Health check endpoint
