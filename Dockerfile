@@ -1,8 +1,8 @@
 # Use the official GraalVM image as the base
 FROM ghcr.io/graalvm/graalvm-ce:latest
 
-# Install Node.js
-RUN apt-get update && apt-get install -y nodejs npm
+# Install curl to fetch Node.js installation script
+RUN gu install nodejs
 
 # Set the working directory inside the container
 WORKDIR /app
