@@ -9,7 +9,7 @@ apt-get install -y default-jdk build-essential
 
 # Install Node.js dependencies
 npm install
-npm install express body-parser cors
+
 echo "Dependencies installed successfully."
 
 # Run the server
