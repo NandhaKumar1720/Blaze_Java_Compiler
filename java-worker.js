@@ -1,66 +1,39 @@
 const { parentPort, workerData } = require("worker_threads");
-const { execSync } = require("child_process");
+const { exec } = require("child_process");
 const os = require("os");
-const fs = require("fs");
 const path = require("path");
 
-// Utility function to clean up temporary files
-function cleanupFiles(...files) {
-    files.forEach((file) => {
-        try {
-            fs.unlinkSync(file);
-        } catch (err) {
-            // Ignore errors (for files that may not exist)
-        }
-    });
-}
+const javaCompilerPath = "javac";
+const javaExecutorPath = "java";
 
 // Worker logic
 (async () => {
     const { code, input } = workerData;
 
-    // Paths for the temporary Java file
-    const tmpDir = os.tmpdir();
-    const javaFile = path.join(tmpDir, "Main.java");
-    const classFile = path.join(tmpDir, "Main.class");
-
     try {
-        // Write the Java code to the Main.java file
-        fs.writeFileSync(javaFile, code);
+        // Run the Java code in-memory without writing it to a file
+        exec(`${javaCompilerPath} -Xlint:all -g:none -cp ${os.tmpdir()} -d ${os.tmpdir()} -sourcepath ${os.tmpdir()} -encoding UTF-8`, (err, stdout, stderr) => {
+            if (err) {
+                return parentPort.postMessage({
+                    error: { fullError: `Compilation Error:\n${stderr}` },
+                });
+            }
 
-        // Compile the Java code
-        try {
-            execSync(`javac ${javaFile}`, { encoding: "utf-8" });
-        } catch (error) {
-            cleanupFiles(javaFile);
-            return parentPort.postMessage({
-                error: { fullError: `Compilation Error:\n${error.message}` },
+            // Execute the Java program after compilation
+            exec(`${javaExecutorPath} -cp ${os.tmpdir()} Main`, { input }, (runErr, output, runStderr) => {
+                if (runErr) {
+                    return parentPort.postMessage({
+                        error: { fullError: `Runtime Error:\n${runStderr}` },
+                    });
+                }
+
+                // Send the output back to the main thread
+                parentPort.postMessage({
+                    output: output || "No output received!",
+                });
             });
-        }
-
-        // Execute the compiled Java program
-        let output = "";
-        try {
-            output = execSync(`java -cp ${tmpDir} Main`, {
-                input, // Pass input to the Java program
-                encoding: "utf-8",
-            });
-        } catch (error) {
-            cleanupFiles(javaFile, classFile);
-            return parentPort.postMessage({
-                error: { fullError: `Runtime Error:\n${error.message}` },
-            });
-        }
-
-        // Clean up temporary files
-        cleanupFiles(javaFile, classFile);
-
-        // Send the output back to the main thread
-        parentPort.postMessage({
-            output: output || "No output received!",
         });
     } catch (err) {
-        cleanupFiles(javaFile, classFile);
         return parentPort.postMessage({
             error: { fullError: `Server error: ${err.message}` },
         });
