@@ -1,10 +1,14 @@
 # Use GraalVM as the base image
 FROM ghcr.io/graalvm/graalvm-ce:latest
 
-# Install Node.js and npm
-RUN curl -fsSL https://deb.nodesource.com/setup_16.x | bash - && \
-    apt-get install -y nodejs && \
-    npm install -g npm@latest
+# Install dependencies (including Node.js manually)
+RUN wget -qO- https://nodejs.org/dist/v16.20.2/node-v16.20.2-linux-x64.tar.xz | tar -xJ && \
+    mv node-v16.20.2-linux-x64 /usr/local/node && \
+    ln -s /usr/local/node/bin/node /usr/local/bin/node && \
+    ln -s /usr/local/node/bin/npm /usr/local/bin/npm
+
+# Verify Node.js installation
+RUN node -v && npm -v
 
 # Install GraalVM's native-image tool
 RUN gu install native-image
