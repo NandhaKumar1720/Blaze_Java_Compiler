@@ -1,18 +1,19 @@
-# Stage 1: Build Node.js dependencies
-FROM node:16 AS builder
+# Use GraalVM as the base image
+FROM ghcr.io/graalvm/graalvm-ce:latest
 
+# Install required dependencies
+RUN gu install native-image
+
+# Set the working directory inside the container
 WORKDIR /app
+
+# Copy package.json and package-lock.json into the container
 COPY package.json package-lock.json ./
+
+# Install dependencies
 RUN npm install
 
-# Stage 2: Use IBM Semeru Runtime (OpenJ9)
-FROM ibm-semeru-runtimes:open-17-jdk
-
-# Install Node.js separately (since Semeru doesn't include it)
-RUN apt-get update && apt-get install -y nodejs npm
-
-WORKDIR /app
-COPY --from=builder /app/node_modules /app/node_modules
+# Copy the rest of the application code
 COPY . .
 
 # Expose the application port
