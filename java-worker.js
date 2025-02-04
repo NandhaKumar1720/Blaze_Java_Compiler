@@ -4,57 +4,54 @@ const os = require("os");
 const fs = require("fs");
 const path = require("path");
 
+// Function to clean up temporary files
+function cleanupFiles(...files) {
+    files.forEach((file) => {
+        try {
+            fs.unlinkSync(file);
+        } catch (err) {
+            // Ignore errors
+        }
+    });
+}
+
 (async () => {
     const { code } = workerData;
 
-    // Validate basic Java structure
-    if (!code.includes("class") || !code.includes("public static void main")) {
-        return parentPort.postMessage({
-            error: { fullError: "Invalid Java code structure!" },
-        });
-    }
+    // Create temporary Java file
+    const tmpDir = os.tmpdir();
+    const className = `TempJava${Date.now()}`;
+    const javaFile = path.join(tmpDir, `${className}.java`);
+    const classFile = path.join(tmpDir, `${className}.class`);
 
     try {
-        const tmpDir = os.tmpdir();
-        const className = `TempClass_${Date.now()}`;
-        const sourceFile = path.join(tmpDir, `${className}.java`);
-
-        // Wrap the code
-        const wrappedCode = `
-            import org.codehaus.janino.SimpleCompiler;
-
+        // Java program template
+        const javaCode = `
             public class ${className} {
-                public static void main(String[] args) throws Exception {
-                    String javaCode = "public class DynamicClass { public static void run() { " + args[0] + " } }";
-                    SimpleCompiler compiler = new SimpleCompiler();
-                    compiler.cook(javaCode);
-                    Class<?> compiledClass = compiler.getClassLoader().loadClass("DynamicClass");
-                    compiledClass.getMethod("run").invoke(null);
+                public static void main(String[] args) {
+                    ${code}
                 }
             }
         `;
 
-        // Write Java code to a file
-        fs.writeFileSync(sourceFile, wrappedCode);
+        // Write Java code to file
+        fs.writeFileSync(javaFile, javaCode);
 
-        // Run Java with Janino JAR
-        let output = "";
-        try {
-            output = execSync(`java -cp /app/lib/janino.jar:. ${className}`, {
-                encoding: "utf-8",
-            });
-        } catch (error) {
-            return parentPort.postMessage({
-                error: { fullError: `Execution Error: ${error.message}` },
-            });
-        }
+        // Compile using OpenJ9
+        execSync(`javac -J-XX:+UseJIT ${javaFile}`, { cwd: tmpDir });
 
-        parentPort.postMessage({
-            output: output || "No output received!",
+        // Run the compiled Java program
+        let output = execSync(`java -Xquickstart -cp ${tmpDir} ${className}`, {
+            encoding: "utf-8",
         });
-    } catch (err) {
-        return parentPort.postMessage({
-            error: { fullError: `Server error: ${err.message}` },
-        });
+
+        // Cleanup temporary files
+        cleanupFiles(javaFile, classFile);
+
+        // Send output to main thread
+        parentPort.postMessage({ output: output.trim() || "No output!" });
+    } catch (error) {
+        cleanupFiles(javaFile, classFile);
+        parentPort.postMessage({ error: `Runtime Error:\n${error.message}` });
     }
 })();
