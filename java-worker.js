@@ -1,5 +1,5 @@
 const { parentPort, workerData } = require("worker_threads");
-const { createCompiler } = require("janino");
+const { execSync } = require("child_process");
 const os = require("os");
 const fs = require("fs");
 const path = require("path");
@@ -15,21 +15,21 @@ const path = require("path");
     }
 
     try {
-        // Prepare temporary directory and file
         const tmpDir = os.tmpdir();
         const className = `TempClass_${Date.now()}`;
         const sourceFile = path.join(tmpDir, `${className}.java`);
 
-        // Wrap code to ensure it runs safely
+        // Wrap the code
         const wrappedCode = `
-            import java.io.*;
+            import org.codehaus.janino.SimpleCompiler;
+
             public class ${className} {
-                public static void main(String[] args) {
-                    try {
-                        ${code}
-                    } catch (Exception e) {
-                        System.out.println("Runtime Error: " + e.getMessage());
-                    }
+                public static void main(String[] args) throws Exception {
+                    String javaCode = "public class DynamicClass { public static void run() { " + args[0] + " } }";
+                    SimpleCompiler compiler = new SimpleCompiler();
+                    compiler.cook(javaCode);
+                    Class<?> compiledClass = compiler.getClassLoader().loadClass("DynamicClass");
+                    compiledClass.getMethod("run").invoke(null);
                 }
             }
         `;
@@ -37,22 +37,18 @@ const path = require("path");
         // Write Java code to a file
         fs.writeFileSync(sourceFile, wrappedCode);
 
-        // Compile using Janino
-        const compiler = createCompiler();
-        compiler.cook(wrappedCode);
-
-        // Run the compiled Java class
+        // Run Java with Janino JAR
         let output = "";
         try {
-            const result = compiler.getMethod(`${className}.main`, [String[]]);
-            output = result([]); // Run the compiled main method
+            output = execSync(`java -cp /app/lib/janino.jar:. ${className}`, {
+                encoding: "utf-8",
+            });
         } catch (error) {
             return parentPort.postMessage({
                 error: { fullError: `Execution Error: ${error.message}` },
             });
         }
 
-        // Send output back to main thread
         parentPort.postMessage({
             output: output || "No output received!",
         });
