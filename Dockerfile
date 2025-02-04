@@ -1,7 +1,12 @@
 # Use GraalVM as the base image
 FROM ghcr.io/graalvm/graalvm-ce:latest
 
-# Install required dependencies
+# Install Node.js and npm
+RUN curl -fsSL https://deb.nodesource.com/setup_16.x | bash - && \
+    apt-get install -y nodejs && \
+    npm install -g npm@latest
+
+# Install GraalVM's native-image tool
 RUN gu install native-image
 
 # Set the working directory inside the container
