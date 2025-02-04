@@ -1,16 +1,18 @@
-# Use Eclipse OpenJ9 via IBM Semeru Runtime
-FROM ibm-semeru-runtimes:open-17-jdk
+# Stage 1: Build Node.js dependencies
+FROM node:16 AS builder
 
-# Set the working directory
 WORKDIR /app
-
-# Copy package.json and package-lock.json
 COPY package.json package-lock.json ./
-
-# Install dependencies
 RUN npm install
 
-# Copy the rest of the application code
+# Stage 2: Use IBM Semeru Runtime (OpenJ9)
+FROM ibm-semeru-runtimes:open-17-jdk
+
+# Install Node.js separately (since Semeru doesn't include it)
+RUN apt-get update && apt-get install -y nodejs npm
+
+WORKDIR /app
+COPY --from=builder /app/node_modules /app/node_modules
 COPY . .
 
 # Expose the application port
