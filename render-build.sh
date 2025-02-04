@@ -1,17 +1,11 @@
 #!/bin/bash
 
-# Install dependencies for Java and Node.js
 echo "Installing dependencies..."
-
-# Install Java JDK
 apt-get update
-apt-get install -y default-jdk build-essential
+apt-get install -y openjdk-11-jre python3 python3-pip
 
-# Install Node.js dependencies
-npm install
+echo "Building Java project..."
+./gradlew build
 
-echo "Dependencies installed successfully."
-
-# Run the server
 echo "Starting the server..."
-npm start
+java -jar build/libs/server.jar
