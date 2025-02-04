@@ -1,5 +1,5 @@
-# Use Eclipse OpenJ9 as the base image
-FROM adoptopenjdk/openj9:latest
+# Use Eclipse OpenJ9 via IBM Semeru Runtime
+FROM ibm-semeru-runtimes:open-17-jdk
 
 # Set the working directory
 WORKDIR /app
