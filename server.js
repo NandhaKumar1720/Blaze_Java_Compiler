@@ -2,7 +2,6 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const { Worker } = require("worker_threads");
 const cors = require("cors");
-const http = require("http");
 
 const app = express();
 const port = 3000;
@@ -38,22 +37,15 @@ app.post("/", (req, res) => {
     worker.on("exit", (code) => {
         if (code !== 0) {
             console.error(`Worker stopped with exit code ${code}`);
+            res.status(500).json({ error: { fullError: "Worker exited unexpectedly." } });
         }
     });
 });
-
 
 // Health check endpoint
 app.get("/health", (req, res) => {
     res.status(200).json({ status: "Server is healthy!" });
 });
-
-// Self-pinging mechanism to keep the server alive
-setInterval(() => {
-    http.get(`http://localhost:${port}/health`, (res) => {
-        console.log("Health check pinged!");
-    });
-}, 1 * 60 * 1000); // Ping every 1 minute
 
 // Start the server
 app.listen(port, () => {
