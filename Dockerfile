@@ -1,18 +1,19 @@
-# Use GraalVM for faster Java execution
-FROM ghcr.io/graalvm/graalvm-ce:latest
+# Use a lightweight Node.js image
+FROM node:16-slim
 
-# Install Node.js
-RUN microdnf install -y nodejs npm
+# Install Java JDK (Minimal dependencies)
+RUN apt-get update && apt-get install -y default-jdk-headless && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
 
-# Install dependencies
+# Copy package files and install dependencies
 COPY package.json package-lock.json ./
 RUN npm install --production
 
-# Copy application code
+# Copy the rest of the app
 COPY . .
 
+# Expose port and run server
 EXPOSE 3000
 CMD ["node", "server.js"]
