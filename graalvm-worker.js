@@ -17,11 +17,11 @@ function cleanupFiles(...files) {
 
 // Worker logic
 (async () => {
-    const { code } = workerData;
+    const { code, className } = workerData; // Expecting `className` from user input
 
     // Paths for temporary Java files
     const tmpDir = os.tmpdir();
-    const javaFile = path.join(tmpDir, `TempProgram_${Date.now()}.java`);
+    const javaFile = path.join(tmpDir, `${className}.java`);
 
     try {
         // Write the Java code to the source file
@@ -43,7 +43,6 @@ function cleanupFiles(...files) {
         // Execute the compiled Java class
         let output = "";
         try {
-            const className = path.basename(javaFile, '.java');
             output = execSync(`java -cp ${tmpDir} ${className}`, { encoding: "utf-8" });
         } catch (error) {
             cleanupFiles(javaFile);
