@@ -1,8 +1,8 @@
-# Use GraalVM as the base image
-FROM ghcr.io/graalvm/graalvm-ce:latest
+# Use OpenJDK as the base image
+FROM openjdk:17-jdk-slim
 
 # Install required dependencies
-RUN microdnf install -y wget tar xz
+RUN apt-get update && apt-get install -y wget curl
 
 # Install Node.js manually
 RUN wget -q https://nodejs.org/dist/v16.20.2/node-v16.20.2-linux-x64.tar.xz && \
@@ -14,9 +14,6 @@ RUN wget -q https://nodejs.org/dist/v16.20.2/node-v16.20.2-linux-x64.tar.xz && \
 
 # Verify installation
 RUN node -v && npm -v
-
-# Install GraalVM's native-image tool
-RUN gu install native-image
 
 # Set the working directory inside the container
 WORKDIR /app
