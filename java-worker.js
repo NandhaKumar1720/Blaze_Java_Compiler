@@ -1,5 +1,5 @@
-const { parentPort, workerData } = require("worker_threads");
-const { spawnSync } = require("child_process");
+const { parentPort } = require("worker_threads");
+const { spawn } = require("child_process");
 const os = require("os");
 const fs = require("fs");
 const path = require("path");
@@ -7,41 +7,23 @@ const path = require("path");
 parentPort.on("message", ({ code, input }) => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "java-"));
     const javaFile = path.join(tmpDir, "Main.java");
-    const classFile = path.join(tmpDir, "Main.class");
 
-    try {
-        fs.writeFileSync(javaFile, code);
+    fs.writeFileSync(javaFile, code);
 
-        // Compile Java code
-        const compileProcess = spawnSync("javac", [javaFile], { encoding: "utf-8" });
-        if (compileProcess.status !== 0) {
-            return parentPort.postMessage({
-                error: { fullError: `Compilation Error:\n${compileProcess.stderr}` },
-            });
+    const compile = spawn("javac", [javaFile]);
+    compile.on("close", (code) => {
+        if (code !== 0) {
+            return parentPort.postMessage({ error: { fullError: "Compilation error" } });
         }
 
-        // Run Java code
-        const execProcess = spawnSync("java", ["-cp", tmpDir, "Main"], {
-            input,
-            encoding: "utf-8",
-            timeout: 2000,
-        });
+        const exec = spawn("java", ["-cp", tmpDir, "Main"], { input });
 
-        // Clean up temporary files
-        fs.rmSync(tmpDir, { recursive: true, force: true });
+        let output = "";
+        exec.stdout.on("data", (data) => (output += data.toString()));
 
-        if (execProcess.status !== 0) {
-            return parentPort.postMessage({
-                error: { fullError: `Runtime Error:\n${execProcess.stderr}` },
-            });
-        }
-
-        parentPort.postMessage({
-            output: execProcess.stdout.trim() || "No output received!",
+        exec.on("close", () => {
+            fs.rmSync(tmpDir, { recursive: true, force: true });
+            parentPort.postMessage({ output: output.trim() || "No output received!" });
         });
-    } catch (err) {
-        parentPort.postMessage({
-            error: { fullError: `Server error: ${err.message}` },
-        });
-    }
+    });
 });
