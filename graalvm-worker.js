@@ -1,66 +1,27 @@
-const { parentPort, workerData } = require("worker_threads");
-const { execSync } = require("child_process");
-const os = require("os");
-const fs = require("fs");
-const path = require("path");
+app.post("/", (req, res) => {
+    const { code, className } = req.body; // Expecting both code and className
 
-// Utility function to clean up temporary files
-function cleanupFiles(...files) {
-    files.forEach((file) => {
-        try {
-            fs.unlinkSync(file);
-        } catch (err) {
-            // Ignore errors (for files that may not exist)
+    // Validate input
+    if (!code || !className) {
+        return res.status(400).json({ error: { fullError: "Error: No code or class name provided!" } });
+    }
+
+    // Create a worker thread for Java code execution
+    const worker = new Worker("./graalvm-worker.js", {
+        workerData: { code, className },
+    });
+
+    worker.on("message", (result) => {
+        res.json(result);
+    });
+
+    worker.on("error", (err) => {
+        res.status(500).json({ error: { fullError: `Worker error: ${err.message}` } });
+    });
+
+    worker.on("exit", (code) => {
+        if (code !== 0) {
+            console.error(`Worker stopped with exit code ${code}`);
         }
     });
-}
-
-// Worker logic
-(async () => {
-    const { code, className } = workerData; // Expecting `className` from user input
-
-    // Paths for temporary Java files
-    const tmpDir = os.tmpdir();
-    const javaFile = path.join(tmpDir, `${className}.java`);
-
-    try {
-        // Write the Java code to the source file
-        fs.writeFileSync(javaFile, code);
-
-        // Compile the Java file using javac
-        try {
-            execSync(`javac ${javaFile}`, {
-                encoding: "utf-8",
-                stdio: "pipe",
-            });
-        } catch (error) {
-            cleanupFiles(javaFile);
-            return parentPort.postMessage({
-                error: { fullError: `Compilation Error:\n${error.message}` },
-            });
-        }
-
-        // Execute the compiled Java class
-        let output = "";
-        try {
-            output = execSync(`java -cp ${tmpDir} ${className}`, { encoding: "utf-8" });
-        } catch (error) {
-            cleanupFiles(javaFile);
-            return parentPort.postMessage({
-                error: { fullError: `Runtime Error:\n${error.message}` },
-            });
-        }
-
-        // Clean up files
-        cleanupFiles(javaFile);
-
-        // Send the output back to the main thread
-        parentPort.postMessage({ output: output || "No output received!" });
-
-    } catch (err) {
-        cleanupFiles(javaFile);
-        return parentPort.postMessage({
-            error: { fullError: `Server error: ${err.message}` },
-        });
-    }
-})();
+});
