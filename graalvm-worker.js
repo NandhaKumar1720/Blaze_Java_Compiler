@@ -22,15 +22,14 @@ function cleanupFiles(...files) {
     // Paths for temporary Java files
     const tmpDir = os.tmpdir();
     const javaFile = path.join(tmpDir, `TempProgram_${Date.now()}.java`);
-    const outputFile = path.join(tmpDir, `TempProgram_${Date.now()}`);
 
     try {
         // Write the Java code to the source file
         fs.writeFileSync(javaFile, code);
 
-        // Compile the Java file using GraalVM's native-image
+        // Compile the Java file using javac
         try {
-            execSync(`native-image -cp ${tmpDir} -H:Name=${outputFile} -H:Class=TempProgram`, {
+            execSync(`javac ${javaFile}`, {
                 encoding: "utf-8",
                 stdio: "pipe",
             });
@@ -41,19 +40,20 @@ function cleanupFiles(...files) {
             });
         }
 
-        // Execute the compiled binary
+        // Execute the compiled Java class
         let output = "";
         try {
-            output = execSync(outputFile, { encoding: "utf-8" });
+            const className = path.basename(javaFile, '.java');
+            output = execSync(`java -cp ${tmpDir} ${className}`, { encoding: "utf-8" });
         } catch (error) {
-            cleanupFiles(javaFile, outputFile);
+            cleanupFiles(javaFile);
             return parentPort.postMessage({
                 error: { fullError: `Runtime Error:\n${error.message}` },
             });
         }
 
         // Clean up files
-        cleanupFiles(javaFile, outputFile);
+        cleanupFiles(javaFile);
 
         // Send the output back to the main thread
         parentPort.postMessage({ output: output || "No output received!" });
