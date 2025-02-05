@@ -1,10 +1,11 @@
 #!/bin/bash
 
-# Install dependencies for GraalVM and Node.js
+# Install dependencies for Java and Node.js
 echo "Installing dependencies..."
 
-# Install GraalVM's native-image
-gu install native-image
+# Install Java JDK
+apt-get update
+apt-get install -y default-jdk build-essential
 
 # Install Node.js dependencies
 npm install
