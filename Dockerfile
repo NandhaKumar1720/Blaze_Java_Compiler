@@ -1,34 +1,19 @@
-# Use OpenJDK as the base image
-FROM openjdk:17-jdk-slim
+# Use a lightweight Node.js image
+FROM node:16-slim
 
-# Install required dependencies including xz-utils
-RUN apt-get update && apt-get install -y wget xz-utils
+# Install Java JDK (Minimal dependencies)
+RUN apt-get update && apt-get install -y default-jdk-headless && rm -rf /var/lib/apt/lists/*
 
-# Install Node.js manually
-RUN wget -q https://nodejs.org/dist/v16.20.2/node-v16.20.2-linux-x64.tar.xz && \
-    tar -xJf node-v16.20.2-linux-x64.tar.xz && \
-    mv node-v16.20.2-linux-x64 /usr/local/node && \
-    ln -s /usr/local/node/bin/node /usr/local/bin/node && \
-    ln -s /usr/local/node/bin/npm /usr/local/bin/npm && \
-    rm node-v16.20.2-linux-x64.tar.xz
-
-# Verify installation
-RUN node -v && npm -v
-
-# Set the working directory inside the container
+# Set working directory
 WORKDIR /app
 
-# Copy package.json and package-lock.json into the container
+# Copy package files and install dependencies
 COPY package.json package-lock.json ./
+RUN npm install --production
 
-# Install dependencies
-RUN npm install
-
-# Copy the rest of the application code
+# Copy the rest of the app
 COPY . .
 
-# Expose the application port
+# Expose port and run server
 EXPOSE 3000
-
-# Start the server
 CMD ["node", "server.js"]
