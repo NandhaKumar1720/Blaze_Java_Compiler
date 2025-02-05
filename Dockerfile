@@ -1,8 +1,8 @@
 # Use OpenJDK as the base image
 FROM openjdk:17-jdk-slim
 
-# Install required dependencies
-RUN apt-get update && apt-get install -y wget curl
+# Install required dependencies including xz-utils
+RUN apt-get update && apt-get install -y wget xz-utils
 
 # Install Node.js manually
 RUN wget -q https://nodejs.org/dist/v16.20.2/node-v16.20.2-linux-x64.tar.xz && \
