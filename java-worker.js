@@ -4,34 +4,33 @@ const os = require("os");
 const fs = require("fs");
 const path = require("path");
 
-(async () => {
-    const { code, input } = workerData;
-    const tmpDir = os.tmpdir();
+parentPort.on("message", ({ code, input }) => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "java-"));
     const javaFile = path.join(tmpDir, "Main.java");
     const classFile = path.join(tmpDir, "Main.class");
 
     try {
         fs.writeFileSync(javaFile, code);
 
-        // Compile Java Code (Use spawnSync for faster execution)
+        // Compile Java code
         const compileProcess = spawnSync("javac", [javaFile], { encoding: "utf-8" });
-        if (compileProcess.error || compileProcess.status !== 0) {
+        if (compileProcess.status !== 0) {
             return parentPort.postMessage({
                 error: { fullError: `Compilation Error:\n${compileProcess.stderr}` },
             });
         }
 
-        // Run Java Code (Faster execution, input support)
+        // Run Java code
         const execProcess = spawnSync("java", ["-cp", tmpDir, "Main"], {
             input,
             encoding: "utf-8",
-            timeout: 3000, // Avoid long executions
+            timeout: 2000,
         });
 
-        fs.unlinkSync(javaFile);
-        fs.unlinkSync(classFile);
+        // Clean up temporary files
+        fs.rmSync(tmpDir, { recursive: true, force: true });
 
-        if (execProcess.error || execProcess.status !== 0) {
+        if (execProcess.status !== 0) {
             return parentPort.postMessage({
                 error: { fullError: `Runtime Error:\n${execProcess.stderr}` },
             });
@@ -41,8 +40,8 @@ const path = require("path");
             output: execProcess.stdout.trim() || "No output received!",
         });
     } catch (err) {
-        return parentPort.postMessage({
+        parentPort.postMessage({
             error: { fullError: `Server error: ${err.message}` },
         });
     }
-})();
+});
