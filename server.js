@@ -2,59 +2,47 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const { Worker } = require("worker_threads");
 const cors = require("cors");
-const http = require("http");
+const os = require("os");
 
 const app = express();
 const port = 3000;
+const maxWorkers = os.cpus().length;
+const workerPool = [];
 
-// Enable CORS
+// Middleware
 app.use(cors());
-
-// Middleware for JSON parsing
 app.use(bodyParser.json());
 
-// POST endpoint for Java code execution
+// Pre-initialize worker threads (avoid creation overhead)
+for (let i = 0; i < maxWorkers; i++) {
+    workerPool.push(new Worker("./java-worker.js"));
+}
+
+function getWorker() {
+    return workerPool.length ? workerPool.pop() : new Worker("./java-worker.js");
+}
+
 app.post("/", (req, res) => {
     const { code, input } = req.body;
+    if (!code) return res.status(400).json({ error: { fullError: "No code provided!" } });
 
-    // Validate input
-    if (!code) {
-        return res.status(400).json({ error: { fullError: "Error: No code provided!" } });
-    }
+    const worker = getWorker();
+    worker.postMessage({ code, input });
 
-    // Create a worker thread for Java code execution
-    const worker = new Worker("./java-worker.js", {
-        workerData: { code, input },
-    });
-
-    worker.on("message", (result) => {
+    worker.once("message", (result) => {
         res.json(result);
+        workerPool.push(worker); // Reuse worker
     });
 
-    worker.on("error", (err) => {
+    worker.once("error", (err) => {
         res.status(500).json({ error: { fullError: `Worker error: ${err.message}` } });
     });
 
-    worker.on("exit", (code) => {
-        if (code !== 0) {
-            console.error(`Worker stopped with exit code ${code}`);
-        }
+    worker.once("exit", (code) => {
+        if (code !== 0) console.error(`Worker exited with code ${code}`);
     });
 });
 
-// Health check endpoint
-app.get("/health", (req, res) => {
-    res.status(200).json({ status: "Server is healthy!" });
-});
+app.get("/health", (req, res) => res.status(200).json({ status: "Server is healthy!" }));
 
-// Self-pinging mechanism to keep the server alive
-setInterval(() => {
-    http.get(`http://localhost:${port}/health`, (res) => {
-        console.log("Health check pinged!");
-    });
-}, 1 * 60 * 1000); // Ping every minute
-
-// Start the server
-app.listen(port, () => {
-    console.log(`Server is running on http://localhost:${port}`);
-});
+app.listen(port, () => console.log(`🔥 Ultra-fast Java Compiler running on http://localhost:${port}`));
