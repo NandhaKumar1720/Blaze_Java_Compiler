@@ -3,24 +3,25 @@ const bodyParser = require("body-parser");
 const { Worker } = require("worker_threads");
 const cors = require("cors");
 const os = require("os");
+const path = require("path");
 
 const app = express();
 const port = 3000;
-const maxWorkers = os.cpus().length;  // Set worker pool size to CPU cores
+const maxWorkers = os.cpus().length;
 const workerPool = [];
 
 // Middleware
 app.use(cors());
 app.use(bodyParser.json());
 
-// Pre-warm worker pool for fast execution
+// Pre-initialize workers to keep JVM warm
 for (let i = 0; i < maxWorkers; i++) {
-    workerPool.push(new Worker("./java-worker.js"));
+    workerPool.push(new Worker(path.join(__dirname, "java-worker.js")));
 }
 
-// Reuse workers instead of creating new ones
+// Function to get a worker from the pool
 function getWorker() {
-    return workerPool.length ? workerPool.pop() : new Worker("./java-worker.js");
+    return workerPool.length ? workerPool.pop() : new Worker(path.join(__dirname, "java-worker.js"));
 }
 
 app.post("/", (req, res) => {
@@ -32,7 +33,7 @@ app.post("/", (req, res) => {
 
     worker.once("message", (result) => {
         res.json(result);
-        workerPool.push(worker); // Reuse worker
+        workerPool.push(worker); // Reuse worker to maintain a warm JVM
     });
 
     worker.once("error", (err) => {
