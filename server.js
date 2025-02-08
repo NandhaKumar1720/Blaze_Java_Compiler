@@ -1,7 +1,11 @@
 const express = require("express");
+const cors = require("cors");
 const { Worker } = require("worker_threads");
 
 const app = express();
+
+// Enable CORS for all requests
+app.use(cors());
 app.use(express.json());
 
 app.post("/run", (req, res) => {
