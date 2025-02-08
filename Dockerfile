@@ -1,22 +1,17 @@
-# Use a full Node.js image instead of slim to ensure npm is included
-FROM node:16
-
-# Install Java JDK (Minimal dependencies)
-RUN apt-get update && apt-get install -y default-jdk-headless
-
-# Ensure npm is installed
-RUN corepack enable && npm --version
-
-# Set working directory
+FROM openjdk:17
 WORKDIR /app
 
-# Copy package files and install dependencies
+# Copy Java server and compile it
+COPY JavaServer.java .
+RUN javac JavaServer.java
+
+# Install Node.js
+RUN apt-get update && apt-get install -y nodejs npm
+
+# Copy Node.js server files
 COPY package.json package-lock.json ./
 RUN npm install --production
-
-# Copy the rest of the app
 COPY . .
 
-# Expose port and run server
-EXPOSE 3000
-CMD ["node", "server.js"]
+# Start both servers
+CMD java JavaServer & node server.js
