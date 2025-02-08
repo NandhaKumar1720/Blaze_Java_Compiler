@@ -1,28 +1,44 @@
 const express = require("express");
-const cors = require("cors");
+const bodyParser = require("body-parser");
 const { Worker } = require("worker_threads");
+const cors = require("cors");
+const os = require("os");
 
 const app = express();
+const port = 3000;
+const maxWorkers = os.cpus().length;
+const workerPool = [];
 
-// Enable CORS for all requests
+// Middleware
 app.use(cors());
-app.use(express.json());
+app.use(bodyParser.json());
 
-app.post("/run", (req, res) => {
-    const code = req.body.code;
+// Reuse workers to avoid frequent creation
+function getWorker() {
+    return workerPool.length ? workerPool.pop() : new Worker("./java-worker.js");
+}
 
-    const worker = new Worker("./java-worker.js");
-    worker.postMessage({ code });
+app.post("/", (req, res) => {
+    const { code, input } = req.body;
+    if (!code) return res.status(400).json({ error: { fullError: "No code provided!" } });
 
-    worker.on("message", (message) => {
-        res.json({ output: message.output });
+    const worker = getWorker();
+    worker.postMessage({ code, input });
+
+    worker.once("message", (result) => {
+        res.json(result);
+        workerPool.push(worker); // Reuse worker
     });
 
-    worker.on("error", (err) => {
-        res.status(500).json({ error: err.message });
+    worker.once("error", (err) => {
+        res.status(500).json({ error: { fullError: `Worker error: ${err.message}` } });
+    });
+
+    worker.once("exit", (code) => {
+        if (code !== 0) console.error(`Worker exited with code ${code}`);
     });
 });
 
-app.listen(3000, () => {
-    console.log("🚀 Server running on port 3000");
-});
+app.get("/health", (req, res) => res.status(200).json({ status: "Server is healthy!" }));
+
+app.listen(port, () => console.log(`Server is running on http://localhost:${port}`));
