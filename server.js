@@ -6,18 +6,19 @@ const os = require("os");
 
 const app = express();
 const port = 3000;
-const maxWorkers = os.cpus().length;
+const maxWorkers = os.cpus().length;  // Set worker pool size to CPU cores
 const workerPool = [];
 
 // Middleware
 app.use(cors());
 app.use(bodyParser.json());
 
-// Pre-initialize worker threads (avoid creation overhead)
+// Pre-warm worker pool for fast execution
 for (let i = 0; i < maxWorkers; i++) {
     workerPool.push(new Worker("./java-worker.js"));
 }
 
+// Reuse workers instead of creating new ones
 function getWorker() {
     return workerPool.length ? workerPool.pop() : new Worker("./java-worker.js");
 }
@@ -45,4 +46,4 @@ app.post("/", (req, res) => {
 
 app.get("/health", (req, res) => res.status(200).json({ status: "Server is healthy!" }));
 
-app.listen(port, () => console.log(`🔥 Ultra-fast Java Compiler running on http://localhost:${port}`));
+app.listen(port, () => console.log(`Server is running on http://localhost:${port}`));
