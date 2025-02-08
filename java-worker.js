@@ -33,21 +33,21 @@ function cleanupFiles(...files) {
         }
         const className = classMatch[1];
 
-        // Compile Java to native binary
-        const nativeBinary = path.join(tmpDir, javaFileName);
-        execSync(`native-image --no-fallback -o ${nativeBinary} -cp ${javaFilePath} ${className}`, { encoding: "utf-8" });
+        // Compile Java using GCJ
+        const outputBinary = path.join(tmpDir, javaFileName);
+        execSync(`gcj --main=${className} -o ${outputBinary} ${javaFilePath}`, { encoding: "utf-8" });
 
         // Run the compiled binary
         let output = "";
         try {
-            output = execSync(nativeBinary, { input, encoding: "utf-8" });
+            output = execSync(outputBinary, { input, encoding: "utf-8" });
         } catch (error) {
-            cleanupFiles(javaFilePath, nativeBinary);
+            cleanupFiles(javaFilePath, outputBinary);
             return parentPort.postMessage({ error: { fullError: `Runtime Error:\n${error.message}` } });
         }
 
         // Cleanup and return output
-        cleanupFiles(javaFilePath, nativeBinary);
+        cleanupFiles(javaFilePath, outputBinary);
         parentPort.postMessage({ output: output || "No output received!" });
 
     } catch (err) {
