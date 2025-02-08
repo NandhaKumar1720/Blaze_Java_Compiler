@@ -1,5 +1,11 @@
-# First stage: Node.js for installing dependencies
-FROM node:16 AS node-builder
+# Use a slim Node.js image
+FROM node:16-slim
+
+# Install Java JDK with minimal dependencies
+RUN apt-get update && apt-get install -y default-jdk-headless && rm -rf /var/lib/apt/lists/*
+
+# Use tmpfs for RAM-based temp storage
+RUN mkdir -p /dev/shm/java-cache && chmod 777 /dev/shm/java-cache
 
 # Set working directory
 WORKDIR /app
@@ -7,18 +13,6 @@ WORKDIR /app
 # Copy package files and install dependencies
 COPY package.json package-lock.json ./
 RUN npm install --production
-
-# Second stage: GraalVM for ultra-fast execution
-FROM ghcr.io/graalvm/graalvm-ce:latest AS graalvm
-
-# Install required utilities
-RUN microdnf install -y tar gzip && microdnf clean all
-
-# Set working directory
-WORKDIR /app
-
-# Copy installed node_modules from the first stage
-COPY --from=node-builder /app/node_modules ./node_modules
 
 # Copy the rest of the app
 COPY . .
