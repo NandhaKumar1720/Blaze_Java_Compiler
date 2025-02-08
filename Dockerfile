@@ -1,15 +1,15 @@
-# Use GraalVM with Node.js support
+# Use GraalVM as the base image
 FROM ghcr.io/graalvm/graalvm-ce:latest
 
-# Install Node.js manually
-RUN gu install nodejs
+# Install Node.js and native-image for GraalVM
+RUN gu install nodejs native-image
 
 # Set working directory
 WORKDIR /app
 
 # Copy package.json and install dependencies
 COPY package.json package-lock.json ./
-RUN npm install
+RUN npm install --production
 
 # Copy the rest of the application
 COPY . .
