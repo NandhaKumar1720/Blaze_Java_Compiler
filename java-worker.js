@@ -4,32 +4,35 @@ const os = require("os");
 const fs = require("fs");
 const path = require("path");
 
-// Use RAM-based temp directory on Linux
-const TMP_DIR = os.platform() === "linux" ? "/dev/shm" : os.tmpdir();
-
 parentPort.on("message", ({ code, input }) => {
-    const tmpDir = fs.mkdtempSync(path.join(TMP_DIR, "java-"));
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "java-"));
     const javaFile = path.join(tmpDir, "Main.java");
+    const classFile = path.join(tmpDir, "Main.class");
 
     try {
         fs.writeFileSync(javaFile, code);
 
-        // 🚀 Compile Java Code with Optimizations
-        const compileProcess = spawnSync("javac", ["-J-Xmx64m", "-g:none", "-nowarn", javaFile], { encoding: "utf-8" });
+        // Compile Java with optimizations
+        const compileProcess = spawnSync("javac", ["-J-Xshare:on", javaFile], { encoding: "utf-8" });
         if (compileProcess.status !== 0) {
             return parentPort.postMessage({
                 error: { fullError: `Compilation Error:\n${compileProcess.stderr}` },
             });
         }
 
-        // 🚀 Run Java Code with Optimizations
-        const execProcess = spawnSync("java", ["-XX:+TieredCompilation", "-XX:TieredStopAtLevel=1", "-Xss512k", "-Xbatch", "-cp", tmpDir, "Main"], {
+        // Run Java with optimizations
+        const execProcess = spawnSync("java", [
+            "-Xshare:on",
+            "-XX:+TieredCompilation",
+            "-XX:TieredStopAtLevel=1",
+            "-cp", tmpDir, "Main"
+        ], {
             input,
             encoding: "utf-8",
-            timeout: 1500, // Reduce execution timeout
+            timeout: 2000,
         });
 
-        // Clean up temp files in RAM (Fast!)
+        // Clean up temporary files
         fs.rmSync(tmpDir, { recursive: true, force: true });
 
         if (execProcess.status !== 0) {
