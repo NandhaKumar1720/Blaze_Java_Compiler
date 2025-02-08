@@ -1,47 +1,62 @@
 const { parentPort, workerData } = require("worker_threads");
-const { spawnSync } = require("child_process");
+const { execSync } = require("child_process");
 const os = require("os");
 const fs = require("fs");
 const path = require("path");
 
-parentPort.on("message", ({ code, input }) => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "java-"));
-    const javaFile = path.join(tmpDir, "Main.java");
-    const classFile = path.join(tmpDir, "Main.class");
+// Utility function to clean up temporary files
+function cleanupFiles(...files) {
+    files.forEach((file) => {
+        try {
+            fs.unlinkSync(file);
+        } catch (err) {
+            // Ignore errors (file may not exist)
+        }
+    });
+}
+
+// Worker logic
+(async () => {
+    const { code, input } = workerData;
+
+    // Paths for temporary Java files
+    const tmpDir = os.tmpdir();
+    const sourceFile = path.join(tmpDir, `Temp${Date.now()}.java`);
+    const classFile = sourceFile.replace(".java", ".class");
 
     try {
-        fs.writeFileSync(javaFile, code);
+        // Write the Java code to the source file
+        fs.writeFileSync(sourceFile, code);
 
-        // Compile Java code
-        const compileProcess = spawnSync("javac", [javaFile], { encoding: "utf-8" });
-        if (compileProcess.status !== 0) {
+        // Compile the Java code using GraalVM
+        const graalCommand = "native-image --no-fallback -o temp_exec";
+        execSync(`${graalCommand} -cp ${sourceFile}`, { encoding: "utf-8" });
+
+        // Run the compiled executable
+        let output = "";
+        try {
+            output = execSync("./temp_exec", {
+                input, // Pass input to the Java program
+                encoding: "utf-8",
+            });
+        } catch (error) {
+            cleanupFiles(sourceFile, classFile);
             return parentPort.postMessage({
-                error: { fullError: `Compilation Error:\n${compileProcess.stderr}` },
+                error: { fullError: `Runtime Error:\n${error.message}` },
             });
         }
 
-        // Run Java code
-        const execProcess = spawnSync("java", ["-cp", tmpDir, "Main"], {
-            input,
-            encoding: "utf-8",
-            timeout: 2000,
-        });
+        // Clean up temporary Java files after execution
+        cleanupFiles(sourceFile, classFile, "./temp_exec");
 
-        // Clean up temporary files
-        fs.rmSync(tmpDir, { recursive: true, force: true });
-
-        if (execProcess.status !== 0) {
-            return parentPort.postMessage({
-                error: { fullError: `Runtime Error:\n${execProcess.stderr}` },
-            });
-        }
-
+        // Send the output back to the main thread
         parentPort.postMessage({
-            output: execProcess.stdout.trim() || "No output received!",
+            output: output || "No output received!",
         });
     } catch (err) {
-        parentPort.postMessage({
+        cleanupFiles(sourceFile, classFile);
+        return parentPort.postMessage({
             error: { fullError: `Server error: ${err.message}` },
         });
     }
-});
+})();
