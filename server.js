@@ -3,6 +3,7 @@ const bodyParser = require("body-parser");
 const { Worker } = require("worker_threads");
 const cors = require("cors");
 const http = require("http");
+const path = require("path");
 
 const app = express();
 const port = 3000;
@@ -23,7 +24,7 @@ app.post("/", (req, res) => {
     }
 
     // Create a worker thread for Java code execution
-    const worker = new Worker("./java-worker.js", {
+    const worker = new Worker(path.join(__dirname, "java-worker.js"), {
         workerData: { code, input },
     });
 
