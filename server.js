@@ -2,43 +2,59 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const { Worker } = require("worker_threads");
 const cors = require("cors");
-const os = require("os");
+const http = require("http");
 
 const app = express();
 const port = 3000;
-const maxWorkers = os.cpus().length;
-const workerPool = [];
 
-// Middleware
+// Enable CORS
 app.use(cors());
+
+// Middleware for JSON parsing
 app.use(bodyParser.json());
 
-// Reuse workers to avoid frequent creation
-function getWorker() {
-    return workerPool.length ? workerPool.pop() : new Worker("./java-worker.js");
-}
-
+// POST endpoint for Java code execution
 app.post("/", (req, res) => {
     const { code, input } = req.body;
-    if (!code) return res.status(400).json({ error: { fullError: "No code provided!" } });
 
-    const worker = getWorker();
-    worker.postMessage({ code, input });
+    // Validate input
+    if (!code) {
+        return res.status(400).json({ error: { fullError: "Error: No code provided!" } });
+    }
 
-    worker.once("message", (result) => {
-        res.json(result);
-        workerPool.push(worker); // Reuse worker
+    // Create a worker thread for Java code execution
+    const worker = new Worker("./java-worker.js", {
+        workerData: { code, input },
     });
 
-    worker.once("error", (err) => {
+    worker.on("message", (result) => {
+        res.json(result);
+    });
+
+    worker.on("error", (err) => {
         res.status(500).json({ error: { fullError: `Worker error: ${err.message}` } });
     });
 
-    worker.once("exit", (code) => {
-        if (code !== 0) console.error(`Worker exited with code ${code}`);
+    worker.on("exit", (code) => {
+        if (code !== 0) {
+            console.error(`Worker stopped with exit code ${code}`);
+        }
     });
 });
 
-app.get("/health", (req, res) => res.status(200).json({ status: "Server is healthy!" }));
+// Health check endpoint
+app.get("/health", (req, res) => {
+    res.status(200).json({ status: "Server is healthy!" });
+});
 
-app.listen(port, () => console.log(`Server is running on http://localhost:${port}`));
+// Self-pinging mechanism to keep the server alive
+setInterval(() => {
+    http.get(`http://localhost:${port}/health`, (res) => {
+        console.log("Health check pinged!");
+    });
+}, 1 * 60 * 1000); // Ping every minute
+
+// Start the server
+app.listen(port, () => {
+    console.log(`Server is running on http://localhost:${port}`);
+});
