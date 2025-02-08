@@ -1,37 +1,23 @@
 const { parentPort } = require("worker_threads");
-const { spawn } = require("child_process");
-const fs = require("fs").promises;
-const os = require("os");
-const path = require("path");
+const net = require("net");
 
-parentPort.on("message", async ({ code, input }) => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "java-"));
-    const javaFile = path.join(tmpDir, "Main.java");
+parentPort.on("message", ({ code }) => {
+    const client = new net.Socket();
+    let output = "";
 
-    try {
-        await fs.writeFile(javaFile, code);
+    client.connect(5555, "127.0.0.1", () => {
+        client.write(code + "\n__EOF__\n");
+    });
 
-        // ⚡ Compile Java Code (Optimized)
-        const compile = spawn("javac", ["-d", tmpDir, javaFile]);
-        await new Promise((resolve, reject) => {
-            compile.on("exit", code => code === 0 ? resolve() : reject("Compilation Failed"));
-        });
+    client.on("data", (data) => {
+        output += data.toString();
+        if (output.includes("__END__")) {
+            parentPort.postMessage({ output: output.replace("__END__", "").trim() });
+            client.destroy();
+        }
+    });
 
-        // ⚡ Run Java Code with Optimized JVM Startup
-        const exec = spawn("java", ["-Xshare:on", "-cp", tmpDir, "Main"], {
-            input,
-            encoding: "utf-8"
-        });
-
-        let output = "";
-        exec.stdout.on("data", data => output += data.toString());
-        exec.stderr.on("data", err => console.error(`Error: ${err.toString()}`));
-
-        exec.on("exit", async () => {
-            await fs.rm(tmpDir, { recursive: true, force: true });
-            parentPort.postMessage({ output: output.trim() || "No output!" });
-        });
-    } catch (err) {
+    client.on("error", (err) => {
         parentPort.postMessage({ error: { fullError: `Server error: ${err.message}` } });
-    }
+    });
 });
