@@ -2,9 +2,12 @@
 
 echo "Installing dependencies..."
 
-# Use GraalVM for ultra-fast Java execution
-apt-get update
-apt-get install -y build-essential
+# Install Java JDK (Minimal version)
+apt-get update && apt-get install -y default-jdk-headless build-essential
+
+# Install Node.js dependencies
+npm install
+
 echo "Dependencies installed successfully."
 
 # Run the server
