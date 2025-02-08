@@ -1,15 +1,18 @@
-# Use GraalVM as the base image
-FROM ghcr.io/graalvm/graalvm-ce:latest
+# Use a lightweight base image with GCJ support
+FROM debian:latest
 
-# Install Node.js and native-image for GraalVM
-RUN gu install nodejs native-image
+# Install GNU Java Compiler (GCJ) and Node.js
+RUN apt-get update && apt-get install -y \
+    gcj \
+    nodejs \
+    npm
 
 # Set working directory
 WORKDIR /app
 
 # Copy package.json and install dependencies
 COPY package.json package-lock.json ./
-RUN npm install --production
+RUN npm install
 
 # Copy the rest of the application
 COPY . .
