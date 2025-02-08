@@ -1,37 +1,49 @@
-const { parentPort, workerData } = require("worker_threads");
+const { parentPort } = require("worker_threads");
+const { spawnSync } = require("child_process");
+const os = require("os");
 const fs = require("fs");
-const { exec } = require("child_process");
 const path = require("path");
 
-// Generate unique filenames for security
-const uniqueId = Date.now();
-const javaFileName = `Temp${uniqueId}.java`;
-const classFileName = `Temp${uniqueId}`;
-const javaFilePath = path.join("/tmp", javaFileName);
+const JAVA_OPTS = ["-Xcomp", "-XX:+TieredCompilation", "-XX:+AggressiveOpts"]; // Optimized flags
+const tmpDir = path.join(os.tmpdir(), "java-cache"); // Use persistent temp directory
 
-// Write the Java code to a temporary file
-fs.writeFileSync(javaFilePath, workerData.code);
+// Ensure temp directory exists (avoiding re-creation overhead)
+if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir);
 
-// Compile the Java file
-exec(`javac ${javaFilePath}`, (compileErr, compileStdout, compileStderr) => {
-    if (compileErr) {
-        parentPort.postMessage({ error: compileStderr });
-        return;
-    }
+parentPort.on("message", ({ code, input }) => {
+    const javaFile = path.join(tmpDir, "Main.java");
+    const classFile = path.join(tmpDir, "Main.class");
 
-    // Execute the compiled Java class
-    const command = `java -cp /tmp ${classFileName}`;
-    exec(command, { timeout: 5000 }, (runErr, runStdout, runStderr) => {
-        if (runErr) {
-            parentPort.postMessage({ error: runStderr });
-            return;
+    try {
+        fs.writeFileSync(javaFile, code);
+
+        // Compile Java code with GraalVM and aggressive optimizations
+        const compileProcess = spawnSync("javac", [javaFile, "-d", tmpDir], { encoding: "utf-8" });
+        if (compileProcess.status !== 0) {
+            return parentPort.postMessage({
+                error: { fullError: `Compilation Error:\n${compileProcess.stderr}` },
+            });
         }
 
-        // Send back the execution result
-        parentPort.postMessage({ output: runStdout.trim() });
+        // Run Java code with GraalVM
+        const execProcess = spawnSync("java", [...JAVA_OPTS, "-cp", tmpDir, "Main"], {
+            input,
+            encoding: "utf-8",
+            timeout: 1500, // Reduce timeout to force quick execution
+        });
 
-        // Cleanup: Delete the temp files
-        fs.unlinkSync(javaFilePath);
-        fs.unlinkSync(path.join("/tmp", `${classFileName}.class`));
-    });
+        if (execProcess.status !== 0) {
+            return parentPort.postMessage({
+                error: { fullError: `Runtime Error:\n${execProcess.stderr}` },
+            });
+        }
+
+        parentPort.postMessage({
+            output: execProcess.stdout.trim() || "No output received!",
+        });
+    } catch (err) {
+        parentPort.postMessage({
+            error: { fullError: `Server error: ${err.message}` },
+        });
+    }
 });
