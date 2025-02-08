@@ -1,19 +1,23 @@
-# Use a lightweight Node.js image
-FROM node:16-slim
+# Use the official GraalVM image as the base
+FROM ghcr.io/graalvm/graalvm-ce:latest
 
-# Install Java JDK (Minimal dependencies)
-RUN apt-get update && apt-get install -y default-jdk-headless && rm -rf /var/lib/apt/lists/*
+# Install necessary tools
+RUN gu install native-image
 
-# Set working directory
+# Set the working directory inside the container
 WORKDIR /app
 
-# Copy package files and install dependencies
+# Copy package.json and package-lock.json into the container
 COPY package.json package-lock.json ./
-RUN npm install --production
 
-# Copy the rest of the app
+# Install dependencies using npm
+RUN npm install
+
+# Copy the rest of the application code
 COPY . .
 
-# Expose port and run server
+# Expose the application port
 EXPOSE 3000
+
+# Start the server
 CMD ["node", "server.js"]
