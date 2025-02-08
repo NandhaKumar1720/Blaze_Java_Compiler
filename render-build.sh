@@ -1,13 +1,13 @@
 #!/bin/bash
 
-# Install dependencies for GCJ and Node.js
+# Install dependencies for OpenJDK and Node.js
 echo "Installing dependencies..."
 
 # Update package lists
 apt-get update
 
-# Install GNU Java Compiler (GCJ) and Node.js
-apt-get install -y gcj nodejs npm
+# Install OpenJDK and Node.js
+apt-get install -y openjdk-17-jdk nodejs npm
 
 # Install Node.js dependencies
 npm install
