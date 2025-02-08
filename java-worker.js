@@ -4,33 +4,33 @@ const os = require("os");
 const fs = require("fs");
 const path = require("path");
 
-const JAVA_OPTS = ["-Xcomp", "-XX:+TieredCompilation", "-XX:+AggressiveOpts"]; // Optimized flags
-const tmpDir = path.join(os.tmpdir(), "java-cache"); // Use persistent temp directory
-
-// Ensure temp directory exists (avoiding re-creation overhead)
-if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir);
+// Use RAM-based temp directory on Linux
+const TMP_DIR = os.platform() === "linux" ? "/dev/shm" : os.tmpdir();
 
 parentPort.on("message", ({ code, input }) => {
+    const tmpDir = fs.mkdtempSync(path.join(TMP_DIR, "java-"));
     const javaFile = path.join(tmpDir, "Main.java");
-    const classFile = path.join(tmpDir, "Main.class");
 
     try {
         fs.writeFileSync(javaFile, code);
 
-        // Compile Java code with GraalVM and aggressive optimizations
-        const compileProcess = spawnSync("javac", [javaFile, "-d", tmpDir], { encoding: "utf-8" });
+        // 🚀 Compile Java Code with Optimizations
+        const compileProcess = spawnSync("javac", ["-J-Xmx64m", "-g:none", "-nowarn", javaFile], { encoding: "utf-8" });
         if (compileProcess.status !== 0) {
             return parentPort.postMessage({
                 error: { fullError: `Compilation Error:\n${compileProcess.stderr}` },
             });
         }
 
-        // Run Java code with GraalVM
-        const execProcess = spawnSync("java", [...JAVA_OPTS, "-cp", tmpDir, "Main"], {
+        // 🚀 Run Java Code with Optimizations
+        const execProcess = spawnSync("java", ["-XX:+TieredCompilation", "-XX:TieredStopAtLevel=1", "-Xss512k", "-Xbatch", "-cp", tmpDir, "Main"], {
             input,
             encoding: "utf-8",
-            timeout: 1500, // Reduce timeout to force quick execution
+            timeout: 1500, // Reduce execution timeout
         });
+
+        // Clean up temp files in RAM (Fast!)
+        fs.rmSync(tmpDir, { recursive: true, force: true });
 
         if (execProcess.status !== 0) {
             return parentPort.postMessage({
