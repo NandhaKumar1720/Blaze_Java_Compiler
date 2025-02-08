@@ -1,3 +1,5 @@
+FROM node:16-slim
+
 # Use lightweight GraalVM-based Java image for ultra-fast execution
 FROM ghcr.io/graalvm/graalvm-ce:latest AS graalvm
 
