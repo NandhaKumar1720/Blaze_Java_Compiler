@@ -1,11 +1,12 @@
-# Use a lightweight base image with GCJ support
-FROM debian:latest
+# Use official Node.js image as base
+FROM node:latest
 
-# Install GNU Java Compiler (GCJ) and Node.js
+# Install Java (OpenJDK) and other dependencies
 RUN apt-get update && apt-get install -y \
-    gcj \
+    openjdk-17-jdk \
     nodejs \
-    npm
+    npm \
+    && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
