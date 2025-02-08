@@ -1,52 +1,37 @@
 const { parentPort } = require("worker_threads");
-const { spawnSync } = require("child_process");
+const { spawn } = require("child_process");
+const fs = require("fs").promises;
 const os = require("os");
-const fs = require("fs");
 const path = require("path");
 
-parentPort.on("message", ({ code, input }) => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "java-"));
+parentPort.on("message", async ({ code, input }) => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "java-"));
     const javaFile = path.join(tmpDir, "Main.java");
-    const classFile = path.join(tmpDir, "Main.class");
 
     try {
-        fs.writeFileSync(javaFile, code);
+        await fs.writeFile(javaFile, code);
 
-        // Compile Java with optimizations
-        const compileProcess = spawnSync("javac", ["-J-Xshare:on", javaFile], { encoding: "utf-8" });
-        if (compileProcess.status !== 0) {
-            return parentPort.postMessage({
-                error: { fullError: `Compilation Error:\n${compileProcess.stderr}` },
-            });
-        }
-
-        // Run Java with optimizations
-        const execProcess = spawnSync("java", [
-            "-Xshare:on",
-            "-XX:+TieredCompilation",
-            "-XX:TieredStopAtLevel=1",
-            "-cp", tmpDir, "Main"
-        ], {
-            input,
-            encoding: "utf-8",
-            timeout: 2000,
+        // ⚡ Compile Java Code (Optimized)
+        const compile = spawn("javac", ["-d", tmpDir, javaFile]);
+        await new Promise((resolve, reject) => {
+            compile.on("exit", code => code === 0 ? resolve() : reject("Compilation Failed"));
         });
 
-        // Clean up temporary files
-        fs.rmSync(tmpDir, { recursive: true, force: true });
+        // ⚡ Run Java Code with Optimized JVM Startup
+        const exec = spawn("java", ["-Xshare:on", "-cp", tmpDir, "Main"], {
+            input,
+            encoding: "utf-8"
+        });
 
-        if (execProcess.status !== 0) {
-            return parentPort.postMessage({
-                error: { fullError: `Runtime Error:\n${execProcess.stderr}` },
-            });
-        }
+        let output = "";
+        exec.stdout.on("data", data => output += data.toString());
+        exec.stderr.on("data", err => console.error(`Error: ${err.toString()}`));
 
-        parentPort.postMessage({
-            output: execProcess.stdout.trim() || "No output received!",
+        exec.on("exit", async () => {
+            await fs.rm(tmpDir, { recursive: true, force: true });
+            parentPort.postMessage({ output: output.trim() || "No output!" });
         });
     } catch (err) {
-        parentPort.postMessage({
-            error: { fullError: `Server error: ${err.message}` },
-        });
+        parentPort.postMessage({ error: { fullError: `Server error: ${err.message}` } });
     }
 });
