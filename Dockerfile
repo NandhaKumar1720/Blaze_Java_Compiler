@@ -1,6 +1,14 @@
-FROM node:16-slim
+# First stage: Node.js for installing dependencies
+FROM node:16 AS node-builder
 
-# Use lightweight GraalVM-based Java image for ultra-fast execution
+# Set working directory
+WORKDIR /app
+
+# Copy package files and install dependencies
+COPY package.json package-lock.json ./
+RUN npm install --production
+
+# Second stage: GraalVM for ultra-fast execution
 FROM ghcr.io/graalvm/graalvm-ce:latest AS graalvm
 
 # Install required utilities
@@ -9,9 +17,8 @@ RUN microdnf install -y tar gzip && microdnf clean all
 # Set working directory
 WORKDIR /app
 
-# Copy package files and install dependencies
-COPY package.json package-lock.json ./
-RUN npm install --production
+# Copy installed node_modules from the first stage
+COPY --from=node-builder /app/node_modules ./node_modules
 
 # Copy the rest of the app
 COPY . .
