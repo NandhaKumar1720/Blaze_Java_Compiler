@@ -1,57 +1,37 @@
 const { parentPort, workerData } = require("worker_threads");
-const { execSync } = require("child_process");
-const os = require("os");
 const fs = require("fs");
+const { exec } = require("child_process");
 const path = require("path");
 
-// Utility function to clean up files
-function cleanupFiles(...files) {
-    files.forEach((file) => {
-        try {
-            fs.unlinkSync(file);
-        } catch (err) {}
-    });
-}
+// Generate unique filenames for security
+const uniqueId = Date.now();
+const javaFileName = `Temp${uniqueId}.java`;
+const classFileName = `Temp${uniqueId}`;
+const javaFilePath = path.join("/tmp", javaFileName);
 
-(async () => {
-    const { code, input } = workerData;
+// Write the Java code to a temporary file
+fs.writeFileSync(javaFilePath, workerData.code);
 
-    // Generate a unique filename
-    const tmpDir = os.tmpdir();
-    const javaFileName = `Temp${Date.now()}`;
-    const javaFilePath = path.join(tmpDir, `${javaFileName}.java`);
-    
-    try {
-        // Write Java code to file
-        fs.writeFileSync(javaFilePath, code);
-
-        // Extract the class name (Assumes 'public class <ClassName>')
-        const classMatch = code.match(/public\s+class\s+(\w+)/);
-        if (!classMatch) {
-            cleanupFiles(javaFilePath);
-            return parentPort.postMessage({ error: { fullError: "Error: No public class found!" } });
-        }
-        const className = classMatch[1];
-
-        // Compile Java using GCJ
-        const outputBinary = path.join(tmpDir, javaFileName);
-        execSync(`gcj --main=${className} -o ${outputBinary} ${javaFilePath}`, { encoding: "utf-8" });
-
-        // Run the compiled binary
-        let output = "";
-        try {
-            output = execSync(outputBinary, { input, encoding: "utf-8" });
-        } catch (error) {
-            cleanupFiles(javaFilePath, outputBinary);
-            return parentPort.postMessage({ error: { fullError: `Runtime Error:\n${error.message}` } });
-        }
-
-        // Cleanup and return output
-        cleanupFiles(javaFilePath, outputBinary);
-        parentPort.postMessage({ output: output || "No output received!" });
-
-    } catch (err) {
-        cleanupFiles(javaFilePath);
-        parentPort.postMessage({ error: { fullError: `Server error: ${err.message}` } });
+// Compile the Java file
+exec(`javac ${javaFilePath}`, (compileErr, compileStdout, compileStderr) => {
+    if (compileErr) {
+        parentPort.postMessage({ error: compileStderr });
+        return;
     }
-})();
+
+    // Execute the compiled Java class
+    const command = `java -cp /tmp ${classFileName}`;
+    exec(command, { timeout: 5000 }, (runErr, runStdout, runStderr) => {
+        if (runErr) {
+            parentPort.postMessage({ error: runStderr });
+            return;
+        }
+
+        // Send back the execution result
+        parentPort.postMessage({ output: runStdout.trim() });
+
+        // Cleanup: Delete the temp files
+        fs.unlinkSync(javaFilePath);
+        fs.unlinkSync(path.join("/tmp", `${classFileName}.class`));
+    });
+});
