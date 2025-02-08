@@ -1,23 +1,19 @@
-# Use official Node.js image as base
-FROM node:latest
+# Use lightweight GraalVM-based Java image for ultra-fast execution
+FROM ghcr.io/graalvm/graalvm-ce:latest AS graalvm
 
-# Install Java (OpenJDK) and other dependencies
-RUN apt-get update && apt-get install -y \
-    openjdk-17-jdk \
-    nodejs \
-    npm \
-    && rm -rf /var/lib/apt/lists/*
+# Install required utilities
+RUN microdnf install -y tar gzip && microdnf clean all
 
 # Set working directory
 WORKDIR /app
 
-# Copy package.json and install dependencies
+# Copy package files and install dependencies
 COPY package.json package-lock.json ./
-RUN npm install
+RUN npm install --production
 
-# Copy the rest of the application
+# Copy the rest of the app
 COPY . .
 
-# Expose port and start server
+# Expose port and run server
 EXPOSE 3000
 CMD ["node", "server.js"]
