@@ -1,23 +1,47 @@
-const { parentPort } = require("worker_threads");
-const net = require("net");
+const { parentPort, workerData } = require("worker_threads");
+const { spawnSync } = require("child_process");
+const os = require("os");
+const fs = require("fs");
+const path = require("path");
 
-parentPort.on("message", ({ code }) => {
-    const client = new net.Socket();
-    let output = "";
+parentPort.on("message", ({ code, input }) => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "java-"));
+    const javaFile = path.join(tmpDir, "Main.java");
+    const classFile = path.join(tmpDir, "Main.class");
 
-    client.connect(5555, "127.0.0.1", () => {
-        client.write(code + "\n__EOF__\n");
-    });
+    try {
+        fs.writeFileSync(javaFile, code);
 
-    client.on("data", (data) => {
-        output += data.toString();
-        if (output.includes("__END__")) {
-            parentPort.postMessage({ output: output.replace("__END__", "").trim() });
-            client.destroy();
+        // Compile Java code
+        const compileProcess = spawnSync("javac", [javaFile], { encoding: "utf-8" });
+        if (compileProcess.status !== 0) {
+            return parentPort.postMessage({
+                error: { fullError: `Compilation Error:\n${compileProcess.stderr}` },
+            });
         }
-    });
 
-    client.on("error", (err) => {
-        parentPort.postMessage({ error: { fullError: `Server error: ${err.message}` } });
-    });
+        // Run Java code
+        const execProcess = spawnSync("java", ["-cp", tmpDir, "Main"], {
+            input,
+            encoding: "utf-8",
+            timeout: 2000,
+        });
+
+        // Clean up temporary files
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+
+        if (execProcess.status !== 0) {
+            return parentPort.postMessage({
+                error: { fullError: `Runtime Error:\n${execProcess.stderr}` },
+            });
+        }
+
+        parentPort.postMessage({
+            output: execProcess.stdout.trim() || "No output received!",
+        });
+    } catch (err) {
+        parentPort.postMessage({
+            error: { fullError: `Server error: ${err.message}` },
+        });
+    }
 });
